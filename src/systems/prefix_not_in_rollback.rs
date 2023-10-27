@@ -63,17 +63,19 @@ pub(crate) fn apply_snapshots_and_maybe_rollback<T: TimewarpComponent>(
 
         // need to update comp_hist, since that's where it's loaded from if we rollback.
         match comp_hist.insert(snap_frame, comp_from_snapshot.clone(), &entity) {
-            Ok(()) => (),
-            Err(err) => {
+            Ok(_) => (),
+            Err(TimewarpError::FrameTooOld) => {
+                // do we even want to get here? we could prevent such updates from entering the ss/framebuf?
                 rb_stats.range_faults += 1;
-                // probably FrameTooOld.
+                commands.entity(entity).insert(comp_from_snapshot.clone());
+                warn!("Range fault @ {snap_frame}");
+                return;
+            }
+            Err(err) => {
                 panic!(
-                    "{err:?} {entity:?} apply_snapshots_and_maybe_rollback({}) - skipping",
+                    "{err:?} {entity:?} apply_snapshots_and_maybe_rollback({}) snap_frame={snap_frame} {game_clock:?}",
                     comp_hist.type_name()
                 );
-                // we can't rollback to this
-                // this is bad.
-                // continue;
             }
         }
 

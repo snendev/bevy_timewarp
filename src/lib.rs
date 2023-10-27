@@ -244,7 +244,7 @@ impl Plugin for TimewarpPlugin {
         app.insert_resource(self.config.clone())
             // RollbackRequest events are drained manually in `consolidate_rollback_requests`
             .init_resource::<Events<RollbackRequest>>()
-            .insert_resource(RollbackStats::default())
+            .insert_resource(RollbackStats::new(192)) // 3 seconds at 64hz
             //
             // PREFIX
             //
@@ -315,6 +315,10 @@ impl Plugin for TimewarpPlugin {
                     trace!("Postfix::Last {game_clock:?} {rb:?}");
                 })
                 .in_set(TimewarpPostfixSet::Last),
+            )
+            .add_systems(
+                self.config.schedule(),
+                log_normal_frame.run_if(not(resource_exists::<Rollback>())),
             )
             //
             // End debug headers
@@ -388,4 +392,8 @@ impl Plugin for TimewarpPlugin {
             .insert_resource(Time::<Fixed>::from_seconds(1.0 / 64.0))
             .insert_resource(GameClock::new());
     }
+}
+
+fn log_normal_frame(mut rbs: ResMut<RollbackStats>) {
+    rbs.log_normal_frame();
 }

@@ -8,6 +8,12 @@ use crate::*;
 use bevy::prelude::*;
 use std::{collections::VecDeque, fmt, ops::Range};
 
+pub enum InsertResult {
+    Identical,
+    Replaced,
+    New,
+}
+
 /// values for new frames are push_front'ed onto the vecdeque
 #[derive(Resource, Clone)]
 pub struct FrameBuffer<T>
@@ -140,29 +146,34 @@ where
     /// Is is permitted to insert at any future frame, any gaps will be made None.
     /// so if you insert at newest_frame() + a gazillion, you gets a buffer containing your
     /// one new value and a bunch of Nones after it.
-    pub fn insert(&mut self, frame: FrameNumber, value: T) -> Result<(), TimewarpError> {
+    pub fn insert(&mut self, frame: FrameNumber, value: T) -> Result<InsertResult, TimewarpError> {
         // is this frame too old to be accepted?
-        if frame < self.oldest_frame() {
-            // probably outrageous lag or network desync or something? pretty bad.
-            // error!(
-            //     "Frame too old! range: {:?} attempt: {frame} = {value:?}",
-            //     (
-            //         self.front_frame,
-            //         self.front_frame
-            //             .saturating_sub(self.capacity as FrameNumber)
-            //     )
-            // );
+        // consider that past-frame inserts happen in PreUpdate, after which the frame is incremented
+        // so we use <= here to ensure we don't insert at the boundary, which is then immediately
+        // outside the window after an increment.
+        if frame <= self.oldest_frame() {
             return Err(TimewarpError::FrameTooOld);
         }
         // are we replacing a potential existing value, ie no change in buffer range
         if let Some(index) = self.index(frame) {
             if let Some(val) = self.entries.get_mut(index) {
+                let v = val.as_ref();
                 // TODO should we test if we are we replacing with same-val that already exists,
                 // and bail out here? would still need to avoid mutably derefing the SS somehow.
+                if val.is_none() {
+                    *val = Some(value);
+                    return Ok(InsertResult::New);
+                }
+                if v.is_some() && *v.unwrap() == value {
+                    return Ok(InsertResult::Identical);
+                }
+
                 *val = Some(value);
+                return Ok(InsertResult::Replaced);
             }
-            return Ok(());
+            panic!("Shouldn't get here");
         }
+
         if self.front_frame == 0 || frame == self.front_frame + 1 {
             // no gaps.
         } else {
@@ -180,7 +191,7 @@ where
         self.entries.push_front(Some(value));
         self.front_frame = frame;
         self.entries.truncate(self.capacity);
-        Ok(())
+        Ok(InsertResult::New)
     }
 
     /// gets index into vecdeq for frame number, or None if out of range.
@@ -265,7 +276,11 @@ mod tests {
         // test modifying by get_mut
         let v2 = fb.get_mut(2).unwrap();
         *v2 = 22;
-        fb.insert(2, 22).unwrap();
+
+        assert!(fb
+            .insert(2, 22)
+            .is_err_and(|e| e == TimewarpError::FrameTooOld));
+
         assert_eq!(fb.newest_frame(), 6);
         // inserting with a gap should fill with nones
         fb.insert(8, 8).unwrap();

@@ -88,7 +88,7 @@ pub(crate) fn record_component_history<T: TimewarpComponent>(
         // the main point of this system is just to save the component value to the buffer:
         // insert() does some logging
         match comp_hist.insert(game_clock.frame(), comp.clone(), &entity) {
-            Ok(()) => (),
+            Ok(_) => (),
             Err(err) => {
                 warn!("{err:?} Inserted a too-old frame value in record_component_history @ {game_clock:?} {}", comp_hist.type_name());
             }

@@ -1,4 +1,7 @@
-use crate::{prelude::TimewarpError, FrameBuffer, FrameNumber, TimewarpComponent};
+use crate::{
+    prelude::{InsertResult, TimewarpError},
+    FrameBuffer, FrameNumber, TimewarpComponent,
+};
 use bevy::prelude::*;
 
 /// entities with NoRollback are ignored, even if they have components which
@@ -107,7 +110,7 @@ impl<T: TimewarpComponent> ServerSnapshot<T> {
     pub fn at_frame(&self, frame: FrameNumber) -> Option<&T> {
         self.values.get(frame)
     }
-    pub fn insert(&mut self, frame: FrameNumber, val: T) -> Result<(), TimewarpError> {
+    pub fn insert(&mut self, frame: FrameNumber, val: T) -> Result<InsertResult, TimewarpError> {
         self.values.insert(frame, val)
     }
     pub fn type_name(&self) -> &str {
@@ -171,14 +174,14 @@ impl<T: TimewarpComponent> ComponentHistory<T> {
         frame: FrameNumber,
         val: T,
         entity: &Entity,
-    ) -> Result<(), TimewarpError> {
+    ) -> Result<InsertResult, TimewarpError> {
         trace!("CH.Insert {entity:?} {frame} = {val:?}");
         // TODO this is inefficient atm
-        self.values.insert(frame, val)?;
+        let ret = self.values.insert(frame, val)?;
         if !self.alive_at_frame(frame) {
             self.report_birth_at_frame(frame);
         }
-        Ok(())
+        Ok(ret)
     }
 
     /// removes values buffered for this frame, and greater frames.

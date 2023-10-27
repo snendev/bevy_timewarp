@@ -140,7 +140,7 @@ impl TimewarpTraits for App {
 
 pub enum InsertComponentResult {
     /// means the SS already existed
-    IntoExistingSnapshot,
+    IntoExistingSnapshot(InsertResult),
     /// had to add the timewarp components. SS, CH.
     ComponentsAdded,
 }
@@ -155,23 +155,53 @@ pub trait TimewarpEntityMutTraits {
         frame: FrameNumber,
         component: &T,
     ) -> Result<InsertComponentResult, TimewarpError>;
+    /// Same as `insert_component_at_frame()` but if FrameTooOld, it will insert directly into
+    /// the component, and return FrameTooOldSnapped
+    fn insert_component_at_frame_or_snap<T: TimewarpComponent>(
+        &mut self,
+        frame: FrameNumber,
+        component: &T,
+    ) -> Result<InsertComponentResult, TimewarpError>;
 }
 
 impl TimewarpEntityMutTraits for EntityWorldMut<'_> {
+    fn insert_component_at_frame_or_snap<T: TimewarpComponent>(
+        &mut self,
+        frame: FrameNumber,
+        component: &T,
+    ) -> Result<InsertComponentResult, TimewarpError> {
+        match self.insert_component_at_frame(frame, component) {
+            Err(TimewarpError::FrameTooOld) => {
+                self.insert(component.clone());
+                Err(TimewarpError::FrameTooOldSnapped)
+            }
+            Err(e) => Err(e),
+            Ok(ok) => Ok(ok),
+        }
+    }
+
     fn insert_component_at_frame<T: TimewarpComponent>(
         &mut self,
         frame: FrameNumber,
         component: &T,
     ) -> Result<InsertComponentResult, TimewarpError> {
         if let Some(mut ss) = self.get_mut::<ServerSnapshot<T>>() {
-            ss.insert(frame, component.clone())?;
-            Ok(InsertComponentResult::IntoExistingSnapshot)
+            let ret = ss.insert(frame, component.clone())?;
+            Ok(InsertComponentResult::IntoExistingSnapshot(ret))
         } else {
             let tw_config = self
                 .world()
                 .get_resource::<TimewarpConfig>()
                 .expect("TimewarpConfig resource missing");
             let window_size = tw_config.rollback_window() as usize;
+            let game_clock = self
+                .world()
+                .get_resource::<GameClock>()
+                .expect("GameClock should be present");
+            if frame <= game_clock.frame().saturating_sub(window_size as u32 - 1) {
+                warn!("insert_component_at_frame too old during insert {frame} / {game_clock:?}");
+                return Err(TimewarpError::FrameTooOld);
+            }
             // insert component value at this frame, since the system that records it won't run
             // if a rollback is happening this frame. and if it does it just overwrites
             let comp_history = ComponentHistory::<T>::with_capacity(

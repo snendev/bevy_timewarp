@@ -4,7 +4,7 @@ use bevy::{
     prelude::*,
     utils::intern::Interned,
 };
-use std::{ops::Range, time::Duration};
+use std::{collections::VecDeque, ops::Range, time::Duration};
 
 /// if various systems request rollbacks to different frames within one tick, when consolidating
 /// those requests into an actionable Rollback, do we choose the oldest or newest frame from the
@@ -100,11 +100,41 @@ impl TimewarpConfig {
 }
 
 /// Updated whenever we perform a rollback
-#[derive(Resource, Debug, Default)]
+#[derive(Resource, Debug)]
 pub struct RollbackStats {
     pub num_rollbacks: u64,
     pub range_faults: u64,
     pub non_rollback_updates: u64,
+    rollback_depths: VecDeque<u8>,
+    stat_frames: usize,
+}
+
+impl RollbackStats {
+    /// stat_frames is how many frames of history to log rollback depths for.
+    pub fn new(stat_frames: usize) -> Self {
+        Self {
+            num_rollbacks: 0,
+            range_faults: 0,
+            non_rollback_updates: 0,
+            rollback_depths: VecDeque::with_capacity(stat_frames),
+            stat_frames,
+        }
+    }
+    pub fn log_normal_frame(&mut self) {
+        self.log_rollback(0);
+    }
+    pub fn log_rollback(&mut self, depth: u8) {
+        if depth > 0 {
+            self.num_rollbacks += 1;
+        }
+        self.rollback_depths.push_back(depth);
+        while self.rollback_depths.len() > self.stat_frames {
+            self.rollback_depths.pop_front();
+        }
+    }
+    pub fn rollback_depths(&self) -> &VecDeque<u8> {
+        &self.rollback_depths
+    }
 }
 
 /// If this resource exists, we are doing a rollback. Insert it to initate one manually.

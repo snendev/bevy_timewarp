@@ -41,7 +41,7 @@ fn basic_rollback() {
         (inc_frame, take_damage, log_all)
             .chain()
             .in_set(TimewarpTestSets::GameLogic)
-            .run_if(not(resource_exists::<Rollback>())),
+            .run_if(not(resource_exists::<Rollback>)),
     );
     // the core simulation-only game loop, for running during a rollback
     app.add_systems(
@@ -49,7 +49,7 @@ fn basic_rollback() {
         (inc_frame, take_damage, log_all)
             .chain()
             .in_set(TimewarpTestSets::GameLogic)
-            .run_if(resource_exists::<Rollback>()),
+            .run_if(resource_exists::<Rollback>),
     );
 
     // doing initial spawning here instead of a system in Setup, so we can grab entity ids:
@@ -244,7 +244,7 @@ fn normal_frames_get_a_chance_to_run_between_rollbacks() {
         FixedUpdate,
         (
             inc_frame,
-            inc_bloop.run_if(not(resource_exists::<Rollback>())),
+            inc_bloop.run_if(not(resource_exists::<Rollback>)),
             take_damage,
             log_all,
         )

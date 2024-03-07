@@ -252,11 +252,11 @@ impl Plugin for TimewarpPlugin {
                 self.config.schedule(),
                 (
                     TimewarpPrefixSet::First,
-                    TimewarpPrefixSet::InRollback.run_if(resource_exists::<Rollback>()),
+                    TimewarpPrefixSet::InRollback.run_if(resource_exists::<Rollback>),
                     // -- apply_deferred -- //
-                    TimewarpPrefixSet::NotInRollback.run_if(not(resource_exists::<Rollback>())),
+                    TimewarpPrefixSet::NotInRollback.run_if(not(resource_exists::<Rollback>)),
                     // -- apply_deferred -- //
-                    TimewarpPrefixSet::StartRollback.run_if(resource_added::<Rollback>()),
+                    TimewarpPrefixSet::StartRollback.run_if(resource_added::<Rollback>),
                     TimewarpPrefixSet::UnwrapBlueprints,
                     TimewarpPrefixSet::Last,
                     // -- apply_deferred -- //
@@ -318,7 +318,7 @@ impl Plugin for TimewarpPlugin {
             )
             .add_systems(
                 self.config.schedule(),
-                log_normal_frame.run_if(not(resource_exists::<Rollback>())),
+                log_normal_frame.run_if(not(resource_exists::<Rollback>)),
             )
             //
             // End debug headers
@@ -362,7 +362,7 @@ impl Plugin for TimewarpPlugin {
                 (
                     TimewarpPostfixSet::First,
                     TimewarpPostfixSet::Components,
-                    TimewarpPostfixSet::InRollback.run_if(resource_exists::<Rollback>()),
+                    TimewarpPostfixSet::InRollback.run_if(resource_exists::<Rollback>),
                     TimewarpPostfixSet::Last,
                 )
                     .chain(),

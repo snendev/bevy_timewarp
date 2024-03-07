@@ -9,6 +9,8 @@ Assumes game logic uses bevy's `FixedUpdate` schedule.
 Current status: under development alongside a multiplayer server-authoritative game.
 I am "RJ" on bevy's discord, in the networking channel, if you want to discuss.
 
+**STATUS** i built this for bevy 0.11, and have recently upgraded to 0.13 (still testing on 0.13..)
+
 ### "Sports Games"
 
 This crate is built for so called "sports games" where dynamic entities interact in the same

@@ -90,7 +90,7 @@ impl TimewarpTraits for App {
         self.add_systems(
             schedule,
             prefix_first::record_component_death::<T>
-                .run_if(not(resource_exists::<Rollback>()))
+                .run_if(not(resource_exists::<Rollback>))
                 .in_set(TimewarpPrefixSet::First),
         );
         self.add_systems(
@@ -154,7 +154,7 @@ trait TimewarpCommands {
     fn remove_component_at_end_of_frame<T: TimewarpComponent>(&mut self, frame: FrameNumber);
 }
 
-impl TimewarpCommands for EntityCommands<'_, '_, '_> {
+impl TimewarpCommands for EntityCommands<'_> {
     fn remove_component_at_end_of_frame<T: TimewarpComponent>(&mut self, frame: FrameNumber) {
         self.add(RemoveComponentAtFrame::<T>::new(frame));
     }

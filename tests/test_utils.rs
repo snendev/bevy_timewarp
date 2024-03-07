@@ -31,6 +31,7 @@ pub fn setup_test_app() -> App {
     app.add_plugins(bevy::log::LogPlugin {
         level: bevy::log::Level::TRACE,
         filter: "bevy_timewarp=trace".to_string(),
+        update_subscriber: None,
     });
     app.add_plugins(TimewarpPlugin::new(tw_config));
     app.add_plugins(bevy::time::TimePlugin);
@@ -43,7 +44,7 @@ pub fn setup_test_app() -> App {
         // Should be really small compared to [TIMESTEP]
         Duration::from_nanos(1),
     ));
-    app.add_systems(bevy::app::RunFixedUpdateLoop, |world: &mut World| {
+    app.add_systems(bevy::app::RunFixedMainLoop, |world: &mut World| {
         // Manually runs the `FixedUpdate` schedule every `Update` cycle
         world.run_schedule(FixedUpdate);
     });

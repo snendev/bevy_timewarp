@@ -35,7 +35,7 @@ fn rollback_over_new_spawn() {
         (inc_frame, take_damage, log_all)
             .chain()
             .in_set(TimewarpTestSets::GameLogic)
-            .run_if(not(resource_exists::<Rollback>())),
+            .run_if(not(resource_exists::<Rollback>)),
     );
     // the core simulation-only game loop, for running during a rollback
     app.add_systems(
@@ -43,7 +43,7 @@ fn rollback_over_new_spawn() {
         (inc_frame, take_damage, log_all)
             .chain()
             .in_set(TimewarpTestSets::GameLogic)
-            .run_if(resource_exists::<Rollback>()),
+            .run_if(resource_exists::<Rollback>),
     );
 
     // doing initial spawning here instead of a system in Setup, so we can grab entity ids:

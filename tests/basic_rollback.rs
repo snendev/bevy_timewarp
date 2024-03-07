@@ -16,11 +16,17 @@ fn take_damage(mut q: Query<(Entity, &mut Enemy, &EntName)>) {
     }
 }
 
-fn log_all(game_clock: Res<GameClock>, q: Query<(Entity, &Enemy, &EntName)>) {
+fn log_all(game_clock: Res<GameClock>, q: Query<(Entity, &Enemy, &EntName, Option<&Bloop>)>) {
     for tuple in q.iter() {
         info!("f:{:?} {tuple:?}", game_clock.frame());
     }
 }
+
+#[derive(Debug, Component)]
+struct Bloop(pub u32);
+
+#[derive(Clone, Debug, Component, PartialEq)]
+struct FooBlueprint;
 
 #[test]
 fn basic_rollback() {
@@ -225,4 +231,97 @@ fn basic_rollback() {
     assert_eq!(app.comp_val_at::<Enemy>(e2, 7).unwrap().health, 95);
 
     assert_eq!(app.world.get::<Enemy>(e2).unwrap().health, 94);
+}
+
+#[test]
+fn normal_frames_get_a_chance_to_run_between_rollbacks() {
+    let mut app = setup_test_app();
+
+    app.register_rollback::<Enemy>();
+    app.register_blueprint::<FooBlueprint>();
+
+    app.add_systems(
+        FixedUpdate,
+        (
+            inc_frame,
+            inc_bloop.run_if(not(resource_exists::<Rollback>())),
+            take_damage,
+            log_all,
+        )
+            .chain()
+            .in_set(TimewarpTestSets::GameLogic),
+    );
+
+    fn inc_bloop(mut q: Query<&mut Bloop>) {
+        info!("INC BLOOP");
+        for mut b in q.iter_mut() {
+            b.0 += 1;
+        }
+    }
+
+    // doing initial spawning here instead of a system in Setup, so we can grab entity ids:
+    let e1 = app
+        .world
+        .spawn((
+            Enemy { health: 10 },
+            EntName {
+                name: "E1".to_owned(),
+            },
+            Bloop(0),
+        ))
+        .id();
+
+    assert_eq!(
+        app.world
+            .get_resource::<RollbackStats>()
+            .unwrap()
+            .num_rollbacks,
+        0
+    );
+
+    tick(&mut app); // frame 1
+    tick(&mut app); // frame 2
+    tick(&mut app); // frame 3
+    tick(&mut app); // frame 4
+
+    // we just simulated frame 4
+    let gc = app.world.get_resource::<GameClock>().unwrap();
+    assert_eq!(gc.frame(), 4);
+
+    // by now, these should be current values
+    assert_eq!(app.world.get::<Enemy>(e1).unwrap().health, 6);
+
+    for i in 0..3 {
+        // let mut ss = app.world.get_mut::<ServerSnapshot<Enemy>>(e1).unwrap();
+        // ss.insert(
+        //     2 + i,
+        //     Enemy {
+        //         health: 100 + i as i32,
+        //     },
+        // )
+        // .unwrap();
+
+        // simulate blueprints arriving in the past every frame, triggering a rollback each time
+        app.world
+            .entity_mut(e1)
+            .insert(AssembleBlueprintAtFrame::new(3 + i, FooBlueprint));
+
+        tick(&mut app); // tick 5 + i, with rollback.
+
+        assert_eq!(
+            app.world
+                .get_resource::<RollbackStats>()
+                .unwrap()
+                .num_rollbacks,
+            i as u64 + 1
+        );
+
+        let gc = app.world.get_resource::<GameClock>().unwrap();
+        assert_eq!(gc.frame(), 5 + i);
+    }
+
+    let gc = app.world.get_resource::<GameClock>().unwrap();
+    assert_eq!(gc.frame(), 7);
+
+    assert_eq!(app.world.entity_mut(e1).get::<Bloop>().unwrap().0, 7);
 }

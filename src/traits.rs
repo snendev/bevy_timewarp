@@ -1,5 +1,10 @@
+use std::marker::PhantomData;
+
 use crate::systems::*;
-use bevy::prelude::*;
+use bevy::{
+    ecs::system::{EntityCommand, EntityCommands},
+    prelude::*,
+};
 
 use super::*;
 
@@ -145,9 +150,45 @@ pub enum InsertComponentResult {
     ComponentsAdded,
 }
 
+trait TimewarpCommands {
+    fn remove_component_at_end_of_frame<T: TimewarpComponent>(&mut self, frame: FrameNumber);
+}
+
+impl TimewarpCommands for EntityCommands<'_, '_, '_> {
+    fn remove_component_at_end_of_frame<T: TimewarpComponent>(&mut self, frame: FrameNumber) {
+        self.add(RemoveComponentAtFrame::<T>::new(frame));
+    }
+}
+
+pub struct RemoveComponentAtFrame<T: TimewarpComponent> {
+    pub frame: FrameNumber,
+    _phantom: PhantomData<T>,
+}
+
+impl<T: TimewarpComponent> RemoveComponentAtFrame<T> {
+    fn new(frame: FrameNumber) -> Self {
+        Self {
+            frame,
+            _phantom: PhantomData::default(),
+        }
+    }
+}
+
+impl<T: TimewarpComponent> EntityCommand for RemoveComponentAtFrame<T>
+where
+    Self: Sized,
+{
+    fn apply(self, id: Entity, world: &mut World) {
+        let mut ent_cmd = world.entity_mut(id);
+        ent_cmd.remove_component_at_end_of_frame::<T>(self.frame);
+    }
+}
+
 /// This exists to make my replicon custom deserializing functions nicer.
 /// in theory you can do this with checks for SS or InsertComponentAtFrame everywhere.
 pub trait TimewarpEntityMutTraits {
+    /// removes component at past frame
+    fn remove_component_at_end_of_frame<T: TimewarpComponent>(&mut self, frame: FrameNumber);
     /// For inserting a component into a specific frame.
     /// Timewarp systems will insert into the entity at the correct point.
     fn insert_component_at_frame<T: TimewarpComponent>(
@@ -165,6 +206,26 @@ pub trait TimewarpEntityMutTraits {
 }
 
 impl TimewarpEntityMutTraits for EntityWorldMut<'_> {
+    fn remove_component_at_end_of_frame<T: TimewarpComponent>(&mut self, frame: FrameNumber) {
+        let game_clock = self
+            .world()
+            .get_resource::<GameClock>()
+            .expect("GameClock should be present");
+        if frame == **game_clock {
+            self.remove::<T>();
+            return;
+        }
+
+        if let Some(mut ch) = self.get_mut::<ComponentHistory<T>>() {
+            ch.report_death_at_frame(frame);
+            self.world_scope(|world: &mut World| {
+                let mut rb_ev = world.resource_mut::<Events<RollbackRequest>>();
+                warn!("Requesting Rollback due to remove_component_at_frame, {frame}");
+                rb_ev.send(RollbackRequest::resimulate_this_frame_onwards(frame));
+            });
+        }
+    }
+
     fn insert_component_at_frame_or_snap<T: TimewarpComponent>(
         &mut self,
         frame: FrameNumber,

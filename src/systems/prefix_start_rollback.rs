@@ -33,8 +33,7 @@ pub(crate) fn rollback_initiated(
         );
     }
     // save original period for restoration after rollback completion
-    rb.original_period = Some(fx.period);
-    rb_stats.num_rollbacks += 1;
+    rb.original_period = Some(fx.timestep());
     let depth = rb.range.end - rb.range.start + 1;
     rb_stats.log_rollback(depth.try_into().unwrap_or(255));
     // we wind clock back 1 past first resim frame, so we can load in data for the frame prior

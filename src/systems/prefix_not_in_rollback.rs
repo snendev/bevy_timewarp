@@ -264,6 +264,8 @@ pub(crate) fn request_rollback_for_blueprints<T: Component + std::fmt::Debug + C
 ) {
     for (entity, abaf, opt_twstatus) in q.iter_mut() {
         let snap_frame = abaf.frame;
+
+        // trace!("TESTING BP RB {abaf:?} {game_clock:?}");
         // if frames == match, we want it inserted this frame but not rolled back.
         // don't do this here, the blueprint unpacking fn does this even during rollback.
         // all we have to do is trigger a rollback, and it'll be unpacked for us.

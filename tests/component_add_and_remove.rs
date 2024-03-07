@@ -186,3 +186,62 @@ fn component_add_and_remove() {
     let gc = app.world.get_resource::<GameClock>().unwrap();
     assert_eq!(gc.frame(), 10);
 }
+
+#[test]
+fn component_remove_in_past() {
+    let mut app = setup_test_app();
+
+    app.register_rollback::<Enemy>();
+    app.register_rollback::<Shield>();
+
+    app.add_systems(
+        FixedUpdate,
+        (inc_frame, take_damage, log_all)
+            .chain()
+            .in_set(TimewarpTestSets::GameLogic),
+    );
+
+    // doing initial spawning here instead of a system in Setup, so we can grab entity ids:
+    let e1 = app
+        .world
+        .spawn((
+            Enemy { health: 10 },
+            EntName {
+                name: "E1".to_owned(),
+            },
+        ))
+        .id();
+
+    assert_eq!(
+        app.world
+            .get_resource::<RollbackStats>()
+            .unwrap()
+            .num_rollbacks,
+        0
+    );
+
+    tick(&mut app); // frame 1 -> 9
+    app.world.entity_mut(e1).insert(Shield);
+    tick(&mut app); // frame 2 health -> 9
+    tick(&mut app); // frame 3 health -> 9
+    tick(&mut app); // frame 4 health -> 9
+    assert_eq!(app.comp_val_at::<Enemy>(e1, 4).unwrap().health, 9);
+
+    app.world
+        .entity_mut(e1)
+        .remove_component_at_end_of_frame::<Shield>(2);
+
+    tick(&mut app); // frame 5 rb
+
+    // frames 3 and 4 should decrement the health, since no shield
+
+    assert_eq!(
+        app.world
+            .get_resource::<RollbackStats>()
+            .unwrap()
+            .num_rollbacks,
+        1
+    );
+
+    assert_eq!(app.comp_val_at::<Enemy>(e1, 4).unwrap().health, 7);
+}

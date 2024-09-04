@@ -48,7 +48,7 @@ fn rollback_over_new_spawn() {
 
     // doing initial spawning here instead of a system in Setup, so we can grab entity ids:
     let e1 = app
-        .world
+        .world_mut()
         .spawn((
             Enemy { health: 10 },
             EntName {
@@ -57,7 +57,7 @@ fn rollback_over_new_spawn() {
         ))
         .id();
     let e2 = app
-        .world
+        .world_mut()
         .spawn((
             Enemy { health: 3 },
             EntName {
@@ -67,7 +67,7 @@ fn rollback_over_new_spawn() {
         .id();
 
     assert_eq!(
-        app.world
+        app.world()
             .get_resource::<RollbackStats>()
             .unwrap()
             .num_rollbacks,
@@ -80,15 +80,15 @@ fn rollback_over_new_spawn() {
     tick(&mut app); // frame 4
 
     // we just simulated frame 4
-    let gc = app.world.get_resource::<GameClock>().unwrap();
+    let gc = app.world().get_resource::<GameClock>().unwrap();
     assert_eq!(gc.frame(), 4);
 
     // by now, these should be current values
-    assert_eq!(app.world.get::<Enemy>(e1).unwrap().health, 6);
-    assert_eq!(app.world.get::<Enemy>(e2).unwrap().health, -1);
+    assert_eq!(app.world().get::<Enemy>(e1).unwrap().health, 6);
+    assert_eq!(app.world().get::<Enemy>(e2).unwrap().health, -1);
 
     let e3 = app
-        .world
+        .world_mut()
         .spawn((
             Enemy { health: 3000 },
             EntName {
@@ -99,7 +99,7 @@ fn rollback_over_new_spawn() {
 
     tick(&mut app); // frame 5
 
-    let mut e1mut = app.world.entity_mut(e1);
+    let mut e1mut = app.world_mut().entity_mut(e1);
     e1mut
         .insert_component_at_frame(3, &Enemy { health: 9999 })
         .unwrap();
@@ -107,14 +107,17 @@ fn rollback_over_new_spawn() {
     tick(&mut app); // frame 6 - rb
 
     assert_eq!(
-        app.world
+        app.world()
             .get_resource::<RollbackStats>()
             .unwrap()
             .num_rollbacks,
         1
     );
 
-    assert!(app.world.get_entity(e3).is_some(), "e3 should still exist");
+    assert!(
+        app.world().get_entity(e3).is_some(),
+        "e3 should still exist"
+    );
     assert!(
         app.comp_val_at::<Enemy>(e3, 6).is_some(),
         "e3's Enemy component should exist"

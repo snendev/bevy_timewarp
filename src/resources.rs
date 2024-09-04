@@ -1,8 +1,10 @@
 use crate::FrameNumber;
 use bevy::{
-    ecs::schedule::{InternedScheduleLabel, ScheduleLabel},
+    ecs::{
+        intern::Interned,
+        schedule::{InternedScheduleLabel, ScheduleLabel},
+    },
     prelude::*,
-    utils::intern::Interned,
 };
 use std::{collections::VecDeque, ops::Range, time::Duration};
 

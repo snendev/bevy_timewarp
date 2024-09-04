@@ -58,7 +58,7 @@ fn component_add_and_remove() {
 
     // doing initial spawning here instead of a system in Setup, so we can grab entity ids:
     let e1 = app
-        .world
+        .world_mut()
         .spawn((
             Enemy { health: 10 },
             EntName {
@@ -68,7 +68,7 @@ fn component_add_and_remove() {
         .id();
 
     assert_eq!(
-        app.world
+        app.world()
             .get_resource::<RollbackStats>()
             .unwrap()
             .num_rollbacks,
@@ -76,10 +76,10 @@ fn component_add_and_remove() {
     );
 
     tick(&mut app); // frame 1
-    assert_eq!(app.world.get::<Enemy>(e1).unwrap().health, 9);
+    assert_eq!(app.world().get::<Enemy>(e1).unwrap().health, 9);
 
     // first tick after spawning, the timewarp components should have been added:
-    assert!(app.world.get::<ComponentHistory<Enemy>>(e1).is_some());
+    assert!(app.world().get::<ComponentHistory<Enemy>>(e1).is_some());
 
     tick(&mut app); // frame 2 health -> 8
     tick(&mut app); // frame 3 health -> 7
@@ -89,10 +89,10 @@ fn component_add_and_remove() {
 
     // buffered and actual values should of course match for this frame:
     assert_eq!(app.comp_val_at::<Enemy>(e1, 4).unwrap().health, 6);
-    assert_eq!(app.world.get::<Enemy>(e1).unwrap().health, 6);
+    assert_eq!(app.world().get::<Enemy>(e1).unwrap().health, 6);
 
     // we just simulated frame 4
-    let gc = app.world.get_resource::<GameClock>().unwrap();
+    let gc = app.world().get_resource::<GameClock>().unwrap();
     assert_eq!(gc.frame(), 4);
 
     // server reports E1 acquired a shield on frame 3
@@ -100,12 +100,12 @@ fn component_add_and_remove() {
     let shield_comp = Shield;
     // adding a component for an historical frame:
     let historical_component = InsertComponentAtFrame::new(shield_added_frame, shield_comp);
-    app.world.entity_mut(e1).insert(historical_component);
+    app.world_mut().entity_mut(e1).insert(historical_component);
 
     tick(&mut app); // frame 5 RB
 
     assert_eq!(
-        app.world
+        app.world()
             .get_resource::<RollbackStats>()
             .unwrap()
             .num_rollbacks,
@@ -115,14 +115,14 @@ fn component_add_and_remove() {
     // frame 5 should run normally, then rollback systems will run, effect a rollback,
     // and resimulate from 3 (shield_addded_frame)
     assert_eq!(
-        app.world
+        app.world()
             .get_resource::<RollbackStats>()
             .unwrap()
             .num_rollbacks,
         1
     );
 
-    let prb = app.world.get_resource::<PreviousRollback>().unwrap();
+    let prb = app.world().get_resource::<PreviousRollback>().unwrap();
     // last rollback should have resimualted from 4, since we modified something at 3.
     assert_eq!(prb.0.range.start, 4);
 
@@ -137,10 +137,10 @@ fn component_add_and_remove() {
     tick(&mut app); // frame 6
 
     assert_eq!(app.comp_val_at::<Enemy>(e1, 6).unwrap().health, 7);
-    assert_eq!(app.world.get::<Enemy>(e1).unwrap().health, 7);
+    assert_eq!(app.world().get::<Enemy>(e1).unwrap().health, 7);
 
     info!("removing shield");
-    app.world.entity_mut(e1).remove::<Shield>();
+    app.world_mut().entity_mut(e1).remove::<Shield>();
 
     tick(&mut app); // frame 7
     tick(&mut app); // frame 8
@@ -150,7 +150,7 @@ fn component_add_and_remove() {
     assert_eq!(app.comp_val_at::<Enemy>(e1, 8).unwrap().health, 5);
     assert_eq!(app.comp_val_at::<Enemy>(e1, 9).unwrap().health, 4);
 
-    assert_eq!(app.world.get::<Enemy>(e1).unwrap().health, 4);
+    assert_eq!(app.world().get::<Enemy>(e1).unwrap().health, 4);
 
     // now lets add back a shield at frame 8
     // this tests the following two slightly different code paths:
@@ -159,18 +159,21 @@ fn component_add_and_remove() {
 
     let new_shield = Shield;
 
-    let mut ss_e1 = app.world.get_mut::<ServerSnapshot<Shield>>(e1).unwrap();
+    let mut ss_e1 = app
+        .world_mut()
+        .get_mut::<ServerSnapshot<Shield>>(e1)
+        .unwrap();
     ss_e1.insert(8, new_shield).unwrap();
 
     // PANICs on purpose atm, don't support ICAF if SS present.
-    // app.world
+    // app.world_mut()
     //     .entity_mut(e1)
     //     .insert(InsertComponentAtFrame::<Shield>::new(8, new_shield));
 
     tick(&mut app); // frame 10 - rb
 
     assert_eq!(
-        app.world
+        app.world()
             .get_resource::<RollbackStats>()
             .unwrap()
             .num_rollbacks,
@@ -181,9 +184,9 @@ fn component_add_and_remove() {
     assert_eq!(app.comp_val_at::<Enemy>(e1, 9).unwrap().health, 5); // x
     assert_eq!(app.comp_val_at::<Enemy>(e1, 10).unwrap().health, 5);
 
-    assert_eq!(app.world.get::<Enemy>(e1).unwrap().health, 5);
+    assert_eq!(app.world().get::<Enemy>(e1).unwrap().health, 5);
 
-    let gc = app.world.get_resource::<GameClock>().unwrap();
+    let gc = app.world().get_resource::<GameClock>().unwrap();
     assert_eq!(gc.frame(), 10);
 }
 
@@ -203,7 +206,7 @@ fn component_remove_in_past() {
 
     // doing initial spawning here instead of a system in Setup, so we can grab entity ids:
     let e1 = app
-        .world
+        .world_mut()
         .spawn((
             Enemy { health: 10 },
             EntName {
@@ -213,7 +216,7 @@ fn component_remove_in_past() {
         .id();
 
     assert_eq!(
-        app.world
+        app.world()
             .get_resource::<RollbackStats>()
             .unwrap()
             .num_rollbacks,
@@ -221,13 +224,13 @@ fn component_remove_in_past() {
     );
 
     tick(&mut app); // frame 1 -> 9
-    app.world.entity_mut(e1).insert(Shield);
+    app.world_mut().entity_mut(e1).insert(Shield);
     tick(&mut app); // frame 2 health -> 9
     tick(&mut app); // frame 3 health -> 9
     tick(&mut app); // frame 4 health -> 9
     assert_eq!(app.comp_val_at::<Enemy>(e1, 4).unwrap().health, 9);
 
-    app.world
+    app.world_mut()
         .entity_mut(e1)
         .remove_component_at_end_of_frame::<Shield>(2);
 
@@ -236,7 +239,7 @@ fn component_remove_in_past() {
     // frames 3 and 4 should decrement the health, since no shield
 
     assert_eq!(
-        app.world
+        app.world()
             .get_resource::<RollbackStats>()
             .unwrap()
             .num_rollbacks,

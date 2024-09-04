@@ -31,7 +31,7 @@ pub fn setup_test_app() -> App {
     app.add_plugins(bevy::log::LogPlugin {
         level: bevy::log::Level::TRACE,
         filter: "bevy_timewarp=trace".to_string(),
-        update_subscriber: None,
+        ..Default::default()
     });
     app.add_plugins(TimewarpPlugin::new(tw_config));
     app.add_plugins(bevy::time::TimePlugin);
@@ -58,7 +58,7 @@ pub fn setup_test_app() -> App {
 // and do 1 app.update
 pub fn tick(app: &mut App) {
     app.update();
-    let f = app.world.resource::<GameClock>().frame();
+    let f = app.world().resource::<GameClock>().frame();
     info!("end of update for {f} ----------------------------------------------------------");
 }
 
@@ -70,7 +70,7 @@ pub(crate) trait TimewarpTestTraits {
 impl TimewarpTestTraits for App {
     /// "Give me an Option<T> for the value of the Component T beloning to this entity, at a specific frame"
     fn comp_val_at<T: TimewarpComponent>(&self, entity: Entity, frame: FrameNumber) -> Option<&T> {
-        self.world
+        self.world()
             .get::<ComponentHistory<T>>(entity)
             .expect("Should be a ComponentHistory here")
             .values

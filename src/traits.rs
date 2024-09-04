@@ -45,7 +45,7 @@ impl TimewarpTraits for App {
     }
     fn register_blueprint<T: TimewarpComponent>(&mut self) -> &mut Self {
         let config = self
-            .world
+            .world()
             .get_resource::<TimewarpConfig>()
             .expect("TimewarpConfig resource expected");
         let schedule = config.schedule();
@@ -72,7 +72,7 @@ impl TimewarpTraits for App {
         &mut self,
     ) -> &mut Self {
         let config = self
-            .world
+            .world()
             .get_resource::<TimewarpConfig>()
             .expect("TimewarpConfig resource expected");
         let schedule = config.schedule();

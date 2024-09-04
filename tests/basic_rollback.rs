@@ -54,7 +54,7 @@ fn basic_rollback() {
 
     // doing initial spawning here instead of a system in Setup, so we can grab entity ids:
     let e1 = app
-        .world
+        .world_mut()
         .spawn((
             Enemy { health: 10 },
             EntName {
@@ -63,7 +63,7 @@ fn basic_rollback() {
         ))
         .id();
     let e2 = app
-        .world
+        .world_mut()
         .spawn((
             Enemy { health: 3 },
             EntName {
@@ -73,7 +73,7 @@ fn basic_rollback() {
         .id();
 
     assert_eq!(
-        app.world
+        app.world()
             .get_resource::<RollbackStats>()
             .unwrap()
             .num_rollbacks,
@@ -81,15 +81,15 @@ fn basic_rollback() {
     );
 
     tick(&mut app); // frame 1
-    assert_eq!(app.world.get::<Enemy>(e1).unwrap().health, 9);
-    assert_eq!(app.world.get::<Enemy>(e2).unwrap().health, 2);
+    assert_eq!(app.world().get::<Enemy>(e1).unwrap().health, 9);
+    assert_eq!(app.world().get::<Enemy>(e2).unwrap().health, 2);
     // first tick after spawning, the timewarp components should have been added:
-    assert!(app.world.get::<ComponentHistory<Enemy>>(e1).is_some());
-    assert!(app.world.get::<ComponentHistory<Enemy>>(e2).is_some());
-    assert!(app.world.get::<ServerSnapshot<Enemy>>(e1).is_some());
-    assert!(app.world.get::<ServerSnapshot<Enemy>>(e2).is_some());
+    assert!(app.world().get::<ComponentHistory<Enemy>>(e1).is_some());
+    assert!(app.world().get::<ComponentHistory<Enemy>>(e2).is_some());
+    assert!(app.world().get::<ServerSnapshot<Enemy>>(e1).is_some());
+    assert!(app.world().get::<ServerSnapshot<Enemy>>(e2).is_some());
     // and contain the correct values from this frame:
-    // let ch_e1 = app.world.get::<ComponentHistory<Enemy>>(e1).unwrap().values.get(1);
+    // let ch_e1 = app.world().get::<ComponentHistory<Enemy>>(e1).unwrap().values.get(1);
     let ch_e1 = app.comp_val_at::<Enemy>(e1, 1);
     assert!(ch_e1.is_some());
     assert_eq!(ch_e1.unwrap().health, 9);
@@ -103,12 +103,12 @@ fn basic_rollback() {
     tick(&mut app); // frame 4
 
     // we just simulated frame 4
-    let gc = app.world.get_resource::<GameClock>().unwrap();
+    let gc = app.world().get_resource::<GameClock>().unwrap();
     assert_eq!(gc.frame(), 4);
 
     // by now, these should be current values
-    assert_eq!(app.world.get::<Enemy>(e1).unwrap().health, 6);
-    assert_eq!(app.world.get::<Enemy>(e2).unwrap().health, -1);
+    assert_eq!(app.world().get::<Enemy>(e1).unwrap().health, 6);
+    assert_eq!(app.world().get::<Enemy>(e2).unwrap().health, -1);
 
     // verify that ComponentHistory is storing values for past frames:
     let ch_e1 = app.comp_val_at::<Enemy>(e1, 2);
@@ -136,23 +136,26 @@ fn basic_rollback() {
     // ate a powerup, changing his health to 100.
     // our app's netcode would insert the authoritative (slightly outdated) values into ServerSnapshots:
 
-    let mut ss_e2 = app.world.get_mut::<ServerSnapshot<Enemy>>(e2).unwrap();
+    let mut ss_e2 = app
+        .world_mut()
+        .get_mut::<ServerSnapshot<Enemy>>(e2)
+        .unwrap();
     ss_e2.insert(2, Enemy { health: 100 }).unwrap();
 
     // this message will be processed in the next tick - frame 5.
 
-    let gc = app.world.get_resource::<GameClock>().unwrap();
+    let gc = app.world().get_resource::<GameClock>().unwrap();
     assert_eq!(gc.frame(), 4);
 
     tick(&mut app); // frame 5
 
-    let gc = app.world.get_resource::<GameClock>().unwrap();
+    let gc = app.world().get_resource::<GameClock>().unwrap();
     assert_eq!(gc.frame(), 5);
 
     // frame 5 should run normally, then rollback systems will run, effect a rollback,
     // and resimulate from f2
     assert_eq!(
-        app.world
+        app.world()
             .get_resource::<RollbackStats>()
             .unwrap()
             .num_rollbacks,
@@ -176,7 +179,7 @@ fn basic_rollback() {
     assert_eq!(ch_e1.unwrap().health, 7);
 
     // resimulation should have brought us back to frame 5.
-    let gc = app.world.get_resource::<GameClock>().unwrap();
+    let gc = app.world().get_resource::<GameClock>().unwrap();
     assert_eq!(gc.frame(), 5);
 
     // frame 2 health was 100,
@@ -186,13 +189,13 @@ fn basic_rollback() {
     let ch_e2 = app.comp_val_at::<Enemy>(e2, 5);
     assert!(ch_e2.is_some());
     assert_eq!(ch_e2.unwrap().health, 97);
-    assert_eq!(app.world.get::<Enemy>(e2).unwrap().health, 97);
+    assert_eq!(app.world().get::<Enemy>(e2).unwrap().health, 97);
 
     tick(&mut app); // frame 6
 
     // should have been a normal frame, no more rollbacks:
     assert_eq!(
-        app.world
+        app.world()
             .get_resource::<RollbackStats>()
             .unwrap()
             .num_rollbacks,
@@ -206,12 +209,15 @@ fn basic_rollback() {
     tick(&mut app); // frame 7
 
     assert_eq!(app.comp_val_at::<Enemy>(e2, 7).unwrap().health, 95);
-    assert_eq!(app.world.get::<Enemy>(e2).unwrap().health, 95);
+    assert_eq!(app.world().get::<Enemy>(e2).unwrap().health, 95);
 
     // now lets test what happens if we update the server snapshot with what we know to be identical
     // values to the the client simulation, to represent a lovely deterministic simulation with no errors
 
-    let mut ss_e2 = app.world.get_mut::<ServerSnapshot<Enemy>>(e2).unwrap();
+    let mut ss_e2 = app
+        .world_mut()
+        .get_mut::<ServerSnapshot<Enemy>>(e2)
+        .unwrap();
     // we know from the asserts above that health of e2 was 97 at frame 5.
     // so lets make the server confirm that:
     ss_e2.insert(5, Enemy { health: 97 }).unwrap();
@@ -220,7 +226,7 @@ fn basic_rollback() {
 
     // but no  - our prediction matches the snapshot so it didn't roll back.
     assert_eq!(
-        app.world
+        app.world()
             .get_resource::<RollbackStats>()
             .unwrap()
             .num_rollbacks,
@@ -230,7 +236,7 @@ fn basic_rollback() {
     assert_eq!(app.comp_val_at::<Enemy>(e2, 8).unwrap().health, 94);
     assert_eq!(app.comp_val_at::<Enemy>(e2, 7).unwrap().health, 95);
 
-    assert_eq!(app.world.get::<Enemy>(e2).unwrap().health, 94);
+    assert_eq!(app.world().get::<Enemy>(e2).unwrap().health, 94);
 }
 
 #[test]
@@ -261,7 +267,7 @@ fn normal_frames_get_a_chance_to_run_between_rollbacks() {
 
     // doing initial spawning here instead of a system in Setup, so we can grab entity ids:
     let e1 = app
-        .world
+        .world_mut()
         .spawn((
             Enemy { health: 10 },
             EntName {
@@ -272,7 +278,7 @@ fn normal_frames_get_a_chance_to_run_between_rollbacks() {
         .id();
 
     assert_eq!(
-        app.world
+        app.world()
             .get_resource::<RollbackStats>()
             .unwrap()
             .num_rollbacks,
@@ -285,14 +291,14 @@ fn normal_frames_get_a_chance_to_run_between_rollbacks() {
     tick(&mut app); // frame 4
 
     // we just simulated frame 4
-    let gc = app.world.get_resource::<GameClock>().unwrap();
+    let gc = app.world().get_resource::<GameClock>().unwrap();
     assert_eq!(gc.frame(), 4);
 
     // by now, these should be current values
-    assert_eq!(app.world.get::<Enemy>(e1).unwrap().health, 6);
+    assert_eq!(app.world().get::<Enemy>(e1).unwrap().health, 6);
 
     for i in 0..3 {
-        // let mut ss = app.world.get_mut::<ServerSnapshot<Enemy>>(e1).unwrap();
+        // let mut ss = app.world().get_mut::<ServerSnapshot<Enemy>>(e1).unwrap();
         // ss.insert(
         //     2 + i,
         //     Enemy {
@@ -302,26 +308,26 @@ fn normal_frames_get_a_chance_to_run_between_rollbacks() {
         // .unwrap();
 
         // simulate blueprints arriving in the past every frame, triggering a rollback each time
-        app.world
+        app.world_mut()
             .entity_mut(e1)
             .insert(AssembleBlueprintAtFrame::new(3 + i, FooBlueprint));
 
         tick(&mut app); // tick 5 + i, with rollback.
 
         assert_eq!(
-            app.world
+            app.world()
                 .get_resource::<RollbackStats>()
                 .unwrap()
                 .num_rollbacks,
             i as u64 + 1
         );
 
-        let gc = app.world.get_resource::<GameClock>().unwrap();
+        let gc = app.world().get_resource::<GameClock>().unwrap();
         assert_eq!(gc.frame(), 5 + i);
     }
 
-    let gc = app.world.get_resource::<GameClock>().unwrap();
+    let gc = app.world().get_resource::<GameClock>().unwrap();
     assert_eq!(gc.frame(), 7);
 
-    assert_eq!(app.world.entity_mut(e1).get::<Bloop>().unwrap().0, 7);
+    assert_eq!(app.world_mut().entity_mut(e1).get::<Bloop>().unwrap().0, 7);
 }

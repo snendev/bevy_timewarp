@@ -37,7 +37,7 @@ fn despawn_markers() {
 
     // doing initial spawning here instead of a system in Setup, so we can grab entity ids:
     let e1 = app
-        .world
+        .world_mut()
         .spawn((
             Enemy { health: 10 },
             EntName {
@@ -47,7 +47,7 @@ fn despawn_markers() {
         .id();
 
     assert_eq!(
-        app.world
+        app.world()
             .get_resource::<RollbackStats>()
             .unwrap()
             .num_rollbacks,
@@ -55,12 +55,12 @@ fn despawn_markers() {
     );
 
     tick(&mut app); // frame 1
-    assert_eq!(app.world.get::<Enemy>(e1).unwrap().health, 9);
+    assert_eq!(app.world().get::<Enemy>(e1).unwrap().health, 9);
 
     tick(&mut app); // frame 2
     tick(&mut app); // frame 3
 
-    assert_eq!(app.world.get::<Enemy>(e1).unwrap().health, 7);
+    assert_eq!(app.world().get::<Enemy>(e1).unwrap().health, 7);
 
     assert_eq!(app.comp_val_at::<Enemy>(e1, 1).unwrap().health, 9);
     assert_eq!(app.comp_val_at::<Enemy>(e1, 2).unwrap().health, 8);
@@ -70,18 +70,18 @@ fn despawn_markers() {
     // it removes all the components in the same frame, then waits until the rollback_window has
     // elapsed in order to do the actual despawn.
     let despawn_frame = 4;
-    app.world
+    app.world_mut()
         .entity_mut(e1)
         .insert(DespawnMarker::for_frame(despawn_frame));
 
     tick(&mut app); // frame 4
 
     assert!(
-        app.world.get_entity(e1).is_some(),
+        app.world().get_entity(e1).is_some(),
         "entity should still exist"
     );
     assert!(
-        app.world.get::<Enemy>(e1).is_none(),
+        app.world().get::<Enemy>(e1).is_none(),
         "Enemy component should be missing"
     );
 
@@ -89,7 +89,7 @@ fn despawn_markers() {
         tick(&mut app);
     }
     assert!(
-        app.world.get_entity(e1).is_none(),
+        app.world().get_entity(e1).is_none(),
         "entity should be gone by now"
     );
 }
@@ -109,7 +109,7 @@ fn despawn_revival_during_rollback() {
 
     // doing initial spawning here instead of a system in Setup, so we can grab entity ids:
     let e1 = app
-        .world
+        .world_mut()
         .spawn((
             Enemy { health: 10 },
             EntName {
@@ -119,7 +119,7 @@ fn despawn_revival_during_rollback() {
         .id();
 
     assert_eq!(
-        app.world
+        app.world()
             .get_resource::<RollbackStats>()
             .unwrap()
             .num_rollbacks,
@@ -127,12 +127,12 @@ fn despawn_revival_during_rollback() {
     );
 
     tick(&mut app); // frame 1
-    assert_eq!(app.world.get::<Enemy>(e1).unwrap().health, 9);
+    assert_eq!(app.world().get::<Enemy>(e1).unwrap().health, 9);
 
     tick(&mut app); // frame 2
     tick(&mut app); // frame 3
 
-    assert_eq!(app.world.get::<Enemy>(e1).unwrap().health, 7);
+    assert_eq!(app.world().get::<Enemy>(e1).unwrap().health, 7);
 
     assert_eq!(app.comp_val_at::<Enemy>(e1, 1).unwrap().health, 9);
     assert_eq!(app.comp_val_at::<Enemy>(e1, 2).unwrap().health, 8);
@@ -154,29 +154,32 @@ fn despawn_revival_during_rollback() {
     // but should not exist at the start of frame 5.
 
     let despawn_frame = 4;
-    app.world
+    app.world_mut()
         .entity_mut(e1)
         .insert(DespawnMarker::for_frame(despawn_frame));
 
     tick(&mut app); // frame 4 - "sometime during frame 4, we despawned e1"
 
     assert!(
-        app.world.get_entity(e1).is_some(),
+        app.world().get_entity(e1).is_some(),
         "entity should still exist"
     );
     assert!(
-        app.world.get::<Enemy>(e1).is_none(),
+        app.world().get::<Enemy>(e1).is_none(),
         "Enemy component should be missing"
     );
 
     // generate a rollback that should revive the component temporarily
-    let mut ss_e1 = app.world.get_mut::<ServerSnapshot<Enemy>>(e1).unwrap();
+    let mut ss_e1 = app
+        .world_mut()
+        .get_mut::<ServerSnapshot<Enemy>>(e1)
+        .unwrap();
     ss_e1.insert(2, Enemy { health: 100 }).unwrap();
 
     tick(&mut app); // frame 5 -- 1 of rollback_window until despawn
 
     assert_eq!(
-        app.world
+        app.world()
             .get_resource::<RollbackStats>()
             .unwrap()
             .num_rollbacks,
@@ -184,11 +187,11 @@ fn despawn_revival_during_rollback() {
     );
 
     assert!(
-        app.world.get_entity(e1).is_some(),
+        app.world().get_entity(e1).is_some(),
         "entity should still exist"
     );
     assert!(
-        app.world.get::<Enemy>(e1).is_none(),
+        app.world().get::<Enemy>(e1).is_none(),
         "Enemy component should still be missing"
     );
 
@@ -206,7 +209,7 @@ fn despawn_revival_during_rollback() {
     );
 
     assert!(
-        app.world.get::<Enemy>(e1).is_none(),
+        app.world().get::<Enemy>(e1).is_none(),
         "Enemy component should be missing"
     );
     assert!(app.comp_val_at::<Enemy>(e1, 5).is_none());
@@ -216,7 +219,7 @@ fn despawn_revival_during_rollback() {
         tick(&mut app);
     }
     assert!(
-        app.world.get_entity(e1).is_none(),
+        app.world().get_entity(e1).is_none(),
         "entity should be gone by now"
     );
 }

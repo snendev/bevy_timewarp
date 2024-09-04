@@ -55,7 +55,7 @@ fn spawning_in_the_past() {
     // panic!("XXX");
     // doing initial spawning here instead of a system in Setup, so we can grab entity ids:
     let e1 = app
-        .world
+        .world_mut()
         .spawn((
             Enemy { health: 10 },
             EntName {
@@ -65,7 +65,7 @@ fn spawning_in_the_past() {
         .id();
 
     assert_eq!(
-        app.world
+        app.world()
             .get_resource::<RollbackStats>()
             .unwrap()
             .num_rollbacks,
@@ -77,14 +77,14 @@ fn spawning_in_the_past() {
     tick(&mut app); // frame 3
     tick(&mut app); // frame 4
 
-    assert_eq!(app.world.get::<Enemy>(e1).unwrap().health, 6);
+    assert_eq!(app.world().get::<Enemy>(e1).unwrap().health, 6);
     assert_eq!(app.comp_val_at::<Enemy>(e1, 4).unwrap().health, 6);
 
     // spawn E2 and E3 in the past, both on frame 2.
     // only timewarp-registered components can be spawned into the past,
     // other components are spawned in the present frame.
     let e2 = app
-        .world
+        .world_mut()
         .spawn((
             EntName {
                 name: "E2".to_owned(),
@@ -94,7 +94,7 @@ fn spawning_in_the_past() {
         .id();
 
     let e3 = app
-        .world
+        .world_mut()
         .spawn((
             EntName {
                 name: "E3".to_owned(),
@@ -106,7 +106,7 @@ fn spawning_in_the_past() {
     tick(&mut app); // frame 5 - will trigger rollback
 
     assert_eq!(
-        app.world
+        app.world()
             .get_resource::<RollbackStats>()
             .unwrap()
             .num_rollbacks,
@@ -124,7 +124,7 @@ fn spawning_in_the_past() {
     assert_eq!(app.comp_val_at::<Enemy>(e3, 5).unwrap().health, 997);
 
     let e4 = app
-        .world
+        .world_mut()
         .spawn((
             EntName {
                 name: "E4".to_owned(),
@@ -158,7 +158,10 @@ fn spawning_in_the_past_with_ss_partial_updates() {
 
     // this test modifies distinct things in the past at two different frames during the same tick, so:
     {
-        let mut tw_config = app.world.get_resource_mut::<TimewarpConfig>().unwrap();
+        let mut tw_config = app
+            .world_mut()
+            .get_resource_mut::<TimewarpConfig>()
+            .unwrap();
         tw_config.set_consolidation_strategy(RollbackConsolidationStrategy::Oldest);
     }
 
@@ -173,7 +176,7 @@ fn spawning_in_the_past_with_ss_partial_updates() {
 
     // doing initial spawning here instead of a system in Setup, so we can grab entity ids:
     let e1 = app
-        .world
+        .world_mut()
         .spawn((
             Enemy { health: 10 },
             EntName {
@@ -183,7 +186,7 @@ fn spawning_in_the_past_with_ss_partial_updates() {
         .id();
 
     assert_eq!(
-        app.world
+        app.world()
             .get_resource::<RollbackStats>()
             .unwrap()
             .num_rollbacks,
@@ -195,11 +198,11 @@ fn spawning_in_the_past_with_ss_partial_updates() {
     tick(&mut app); // frame 3
     tick(&mut app); // frame 4
 
-    assert_eq!(app.world.get::<Enemy>(e1).unwrap().health, 6);
+    assert_eq!(app.world().get::<Enemy>(e1).unwrap().health, 6);
     assert_eq!(app.comp_val_at::<Enemy>(e1, 4).unwrap().health, 6);
 
     let _e2 = app
-        .world
+        .world_mut()
         .spawn((
             EntName {
                 name: "E2".to_owned(),
@@ -208,13 +211,16 @@ fn spawning_in_the_past_with_ss_partial_updates() {
         ))
         .id();
 
-    let mut ss = app.world.get_mut::<ServerSnapshot<Enemy>>(e1).unwrap();
+    let mut ss = app
+        .world_mut()
+        .get_mut::<ServerSnapshot<Enemy>>(e1)
+        .unwrap();
     ss.insert(3, Enemy { health: 1000 }).unwrap();
 
     tick(&mut app); // frame 5 - will trigger rollback
 
     assert_eq!(
-        app.world
+        app.world()
             .get_resource::<RollbackStats>()
             .unwrap()
             .num_rollbacks,

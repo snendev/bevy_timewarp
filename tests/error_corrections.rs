@@ -50,7 +50,7 @@ fn error_correction() {
 
     // doing initial spawning here instead of a system in Setup, so we can grab entity ids:
     let e1 = app
-        .world
+        .world_mut()
         .spawn((
             Enemy { health: 10 },
             EntName {
@@ -60,7 +60,7 @@ fn error_correction() {
         .id();
 
     assert_eq!(
-        app.world
+        app.world()
             .get_resource::<RollbackStats>()
             .unwrap()
             .num_rollbacks,
@@ -73,11 +73,11 @@ fn error_correction() {
     tick(&mut app); // frame 4
 
     // we just simulated frame 4
-    let gc = app.world.get_resource::<GameClock>().unwrap();
+    let gc = app.world().get_resource::<GameClock>().unwrap();
     assert_eq!(gc.frame(), 4);
 
     // by now, these should be current values
-    assert_eq!(app.world.get::<Enemy>(e1).unwrap().health, 6);
+    assert_eq!(app.world().get::<Enemy>(e1).unwrap().health, 6);
 
     // note for later: after tick 4, E1's health is 6.
     assert_eq!(app.comp_val_at::<Enemy>(e1, 4).unwrap().health, 6);
@@ -89,20 +89,23 @@ fn error_correction() {
     // a new snapshot is available for `Enemy`, and schedule a rollback alongside setting the
     // diff_at_frame flag for the current frame, so a TimewarpCorrection is generated.
 
-    let mut ss_e1 = app.world.get_mut::<ServerSnapshot<Enemy>>(e1).unwrap();
+    let mut ss_e1 = app
+        .world_mut()
+        .get_mut::<ServerSnapshot<Enemy>>(e1)
+        .unwrap();
     ss_e1.insert(2, Enemy { health: 100 }).unwrap();
 
     // this message will be processed in the next tick - frame 5.
     // prior to this there shouldn't be a TimewarpCorrection component,
     // but it should be added.
-    assert!(app.world.get::<TimewarpCorrection<Enemy>>(e1).is_none());
+    assert!(app.world().get::<TimewarpCorrection<Enemy>>(e1).is_none());
 
     tick(&mut app); // frame 5, we expect a rollback
 
-    assert!(app.world.get::<TimewarpCorrection<Enemy>>(e1).is_some());
+    assert!(app.world().get::<TimewarpCorrection<Enemy>>(e1).is_some());
 
     assert_eq!(
-        app.world
+        app.world()
             .get_resource::<RollbackStats>()
             .unwrap()
             .num_rollbacks,
@@ -115,7 +118,7 @@ fn error_correction() {
     assert_eq!(app.comp_val_at::<Enemy>(e1, 5).unwrap().health, 97);
 
     // resimulation should have brought us back to frame 5.
-    let gc = app.world.get_resource::<GameClock>().unwrap();
+    let gc = app.world().get_resource::<GameClock>().unwrap();
     assert_eq!(gc.frame(), 5);
 
     // now the meat of this test - we check that the before/after component values are correct
@@ -131,7 +134,7 @@ fn error_correction() {
     // eg, frame 4.
     //
     // we already asserted that at tick 4 E1's health was 6, so we'd expect it to be 5 at tick 5.
-    let twc = app.world.get::<TimewarpCorrection<Enemy>>(e1).unwrap();
+    let twc = app.world().get::<TimewarpCorrection<Enemy>>(e1).unwrap();
     // component values before/after the rollback
     warn!("{twc:?}");
     assert_eq!(twc.before.health, 6);
@@ -161,7 +164,7 @@ fn error_correction() {
     tick(&mut app); // frame 6
 
     // correction values shouldn't have changed – there was no rollback that frame
-    let twc = app.world.get::<TimewarpCorrection<Enemy>>(e1).unwrap();
+    let twc = app.world().get::<TimewarpCorrection<Enemy>>(e1).unwrap();
     assert_eq!(twc.before.health, 6);
     assert_eq!(twc.after.health, 98);
     assert_eq!(twc.frame, 4);
@@ -173,16 +176,19 @@ fn error_correction() {
     assert_eq!(app.comp_val_at::<Enemy>(e1, 7).unwrap().health, 95);
 
     assert_eq!(app.comp_val_at::<Enemy>(e1, 9).unwrap().health, 93);
-    assert_eq!(app.world.get::<Enemy>(e1).unwrap().health, 93);
+    assert_eq!(app.world().get::<Enemy>(e1).unwrap().health, 93);
 
     // supply frame 7 value at known local value, ie server confirms our simulation value
-    let mut ss_e1 = app.world.get_mut::<ServerSnapshot<Enemy>>(e1).unwrap();
+    let mut ss_e1 = app
+        .world_mut()
+        .get_mut::<ServerSnapshot<Enemy>>(e1)
+        .unwrap();
     ss_e1.insert(7, Enemy { health: 95 }).unwrap();
 
     tick(&mut app); // frame 10 - rollback? no. should be bypassed because prediction was right
 
     assert_eq!(
-        app.world
+        app.world()
             .get_resource::<RollbackStats>()
             .unwrap()
             .num_rollbacks,
@@ -190,10 +196,10 @@ fn error_correction() {
     );
 
     assert_eq!(app.comp_val_at::<Enemy>(e1, 10).unwrap().health, 92);
-    assert_eq!(app.world.get::<Enemy>(e1).unwrap().health, 92);
+    assert_eq!(app.world().get::<Enemy>(e1).unwrap().health, 92);
 
     // no correction should be created since server confirmed predicted value,
     // thus the frame on the TimewarpCorrection should still be 5, from the earlier correction
-    let twc = app.world.get::<TimewarpCorrection<Enemy>>(e1).unwrap();
+    let twc = app.world().get::<TimewarpCorrection<Enemy>>(e1).unwrap();
     assert_eq!(twc.frame, 4);
 }
